@@ -154,8 +154,7 @@ Surefire and Dependency-Check reports are uploaded as artifacts. GitLab CI and J
 | Gap | Impact | Next step |
 |-----|--------|-----------|
 | Duplicate audit entry if an audit append succeeds but the offset is not committed (AD-4) | History can contain a duplicate; current state stays correct | Deterministic event id (topic-partition-offset) as the Mongo `_id`, upsert on replay |
-| REST path has no automatic retry on an optimistic-lock conflict | Caller receives an error instead of a re-validated result | Map the conflict to `409` for caller retry, or route REST through Kafka so both transports share ordering and retry |
+| REST path calls the service directly, so it has no automatic retry on an optimistic-lock conflict | Caller receives an error instead of a re-validated result | Route REST through Kafka (AD-2): the endpoint publishes to `trades.inbound` keyed by `tradeId` and returns `202`, so both transports share the same ordering, retry and dead-letter handling |
 | Per-trade ordering depends on producers keying by `tradeId` (AD-3) | An unkeyed producer loses ordering; `@Version` still prevents stale overwrites, but retries increase | Publish the keying rule as part of the topic contract, or add an ingestion gateway that keys messages |
-| Expiry job runs on every instance when scaled out (AD-7) | Result is correct because the job is idempotent, but the work is duplicated | Distributed scheduler lock (for example ShedLock) |
 | OWASP scan is a non-blocking step until an NVD API key is configured (AD-8) | Without the key the NVD returns 403, so the gate is not enforced yet | Add `NVD_API_KEY` as a repository secret and remove `continue-on-error`. The gate is CVSS >= 7 |
 | Not included: authentication, metrics/tracing, schema registry for message contracts | Outside the scope of this exercise | Spring Security (OAuth2/JWT), Micrometer + tracing, schema registry |
