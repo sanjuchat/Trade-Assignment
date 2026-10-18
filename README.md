@@ -71,19 +71,39 @@ PowerShell: quote the options, e.g. `.\mvnw spring-boot:run "-Dspring-boot.run.p
 
 The `local` profile uses H2 and embedded MongoDB, disables the Kafka listener, and runs the expiry job every minute.
 
+In a second terminal (PowerShell):
+
+```powershell
+$uri = "http://localhost:8080/api/trades"
+$future = (Get-Date).AddYears(1).ToString("yyyy-MM-dd")
+
+function Send($id, $ver, $mat) {
+  $body = @{tradeId=$id; version=$ver; counterPartyId="CP-1"; bookId="B1"; maturityDate=$mat} | ConvertTo-Json
+  try {
+    $r = Invoke-WebRequest -UseBasicParsing -Method Post -Uri $uri -ContentType "application/json" -Body $body
+    "$id v$ver -> $($r.StatusCode)"
+  } catch {
+    "$id v$ver -> $([int]$_.Exception.Response.StatusCode) $($_.ErrorDetails.Message)"
+  }
+}
+
+Send "T1" 2 $future          # 202 accepted
+Send "T1" 1 $future          # 400 LowerVersionException (R1)
+Send "T1" 2 $future          # 202 same version overwrites (R2)
+Send "T2" 1 "2020-05-20"     # 400 MaturityDateException (R3)
+Invoke-RestMethod "$uri/T1"  # current state: version 2, expired N
+(Invoke-RestMethod $uri).Count   # 1 (the rejected T2 was never stored)
+```
+
+On Linux/macOS, the same calls with curl:
+
 ```bash
-# accepted (202)
 curl -i -X POST localhost:8080/api/trades -H "Content-Type: application/json" \
   -d '{"tradeId":"T1","version":2,"counterPartyId":"CP-1","bookId":"B1","maturityDate":"2030-01-01"}'
-# lower version -> 400 LowerVersionException
-curl -i -X POST localhost:8080/api/trades -H "Content-Type: application/json" \
-  -d '{"tradeId":"T1","version":1,"counterPartyId":"CP-1","bookId":"B1","maturityDate":"2030-01-01"}'
-# past maturity -> 400 MaturityDateException
-curl -i -X POST localhost:8080/api/trades -H "Content-Type: application/json" \
-  -d '{"tradeId":"T2","version":1,"counterPartyId":"CP-1","bookId":"B1","maturityDate":"2020-05-20"}'
-# current state
-curl localhost:8080/api/trades/T1
 ```
+
+R4 (expiry) and R5 (expired is terminal) depend on the date passing, so they are demonstrated by
+`TradeStoreRegressionIT`, which moves the clock forward, rather than by this live demo.
 
 ## API
 
@@ -118,12 +138,24 @@ Surefire and Dependency-Check reports are uploaded as artifacts. GitLab CI and J
 
 ## Known limitations and next steps
 
-- **Audit duplicates:** if an audit append succeeds but the acknowledgement is lost, a retry can add a duplicate
-  audit entry. Fix: stable event id with a unique index (see AD-4).
-- **REST path concurrency:** an optimistic-lock conflict on REST surfaces as an error rather than an automatic
-  re-read and re-validate; the Kafka path recovers through redelivery.
-- **Producer keying:** per-trade ordering depends on producers keying by `tradeId`; the consumer cannot enforce it.
-- **Hot trades:** a very busy `tradeId` is a single-partition throughput hotspot.
-- **Scan threshold:** the CI gate fails at CVSS >= 7 (High and above), stricter than "critical/blocker" in the brief.
-- **Not included:** authentication, metrics/tracing, schema-registry-based message contracts.
-- **The OWASP scan runs as a separate, non-blocking step until an NVD API key is configured as a repository secret (NVD returns 403 without one).
+### Accepted trade-offs (decided in the ADRs)
+
+- **Two datastores (AD-1):** more operational overhead than one PostgreSQL database with an audit table, in exchange
+  for separating high-volume history writes from the operational table.
+- **Hot trade (AD-3):** one `tradeId` maps to one partition and one consumer, so a very busy trade is processed
+  serially. Different trades still run in parallel.
+- **Eventual consistency across stores (AD-4):** during a retry the two stores can briefly differ; they converge on
+  redelivery.
+- **Expiry is not instantaneous (AD-7):** a trade is marked expired on the next scheduled run, not at the exact
+  moment it matures. The cron is configurable (`trade.expiry.cron`).
+
+### Gaps I would close next
+
+| Gap | Impact | Next step |
+|-----|--------|-----------|
+| Duplicate audit entry if an audit append succeeds but the offset is not committed (AD-4) | History can contain a duplicate; current state stays correct | Deterministic event id (topic-partition-offset) as the Mongo `_id`, upsert on replay |
+| REST path has no automatic retry on an optimistic-lock conflict | Caller receives an error instead of a re-validated result | Map the conflict to `409` for caller retry, or route REST through Kafka so both transports share ordering and retry |
+| Per-trade ordering depends on producers keying by `tradeId` (AD-3) | An unkeyed producer loses ordering; `@Version` still prevents stale overwrites, but retries increase | Publish the keying rule as part of the topic contract, or add an ingestion gateway that keys messages |
+| Expiry job runs on every instance when scaled out (AD-7) | Result is correct because the job is idempotent, but the work is duplicated | Distributed scheduler lock (for example ShedLock) |
+| OWASP scan is a non-blocking step until an NVD API key is configured (AD-8) | Without the key the NVD returns 403, so the gate is not enforced yet | Add `NVD_API_KEY` as a repository secret and remove `continue-on-error`. The gate is CVSS >= 7 |
+| Not included: authentication, metrics/tracing, schema registry for message contracts | Outside the scope of this exercise | Spring Security (OAuth2/JWT), Micrometer + tracing, schema registry |
