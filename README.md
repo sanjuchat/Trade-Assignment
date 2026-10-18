@@ -126,3 +126,4 @@ Surefire and Dependency-Check reports are uploaded as artifacts. GitLab CI and J
 - **Hot trades:** a very busy `tradeId` is a single-partition throughput hotspot.
 - **Scan threshold:** the CI gate fails at CVSS >= 7 (High and above), stricter than "critical/blocker" in the brief.
 - **Not included:** authentication, metrics/tracing, schema-registry-based message contracts.
+- **The OWASP scan runs as a separate, non-blocking step until an NVD API key is configured as a repository secret (NVD returns 403 without one).
