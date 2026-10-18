@@ -1,0 +1,29 @@
+# Demo profile: no Kafka, PostgreSQL or MongoDB needed.
+#   ./mvnw spring-boot:run -Dspring-boot.run.profiles=local -Dspring-boot.run.useTestClasspath=true
+# (useTestClasspath puts H2 + embedded Mongo on the classpath; they are test-scoped dependencies.)
+spring:
+  autoconfigure:
+    exclude: org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration
+  datasource:
+    url: jdbc:h2:mem:tradestore;MODE=PostgreSQL;DB_CLOSE_DELAY=-1
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+  h2:
+    console:
+      enabled: false
+
+trade:
+  kafka:
+    enabled: false          # listener + Kafka config are not loaded; use the REST endpoint
+  expiry:
+    cron: "0 * * * * *"     # every minute so R4 is visible in a live demo
+
+de:
+  flapdoodle:
+    mongodb:
+      embedded:
+        version: 6.0.8

@@ -1,0 +1,46 @@
+spring:
+  application:
+    name: trade-store
+  jpa:
+    open-in-view: false
+  data:
+    mongodb:
+      database: tradestore
+      auto-index-creation: true
+  kafka:
+    consumer:
+      group-id: trade-store
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+
+trade:
+  kafka:
+    enabled: true
+    topic: trades.inbound
+    dlt-topic: trades.dlt
+    partitions: 3
+  expiry:
+    cron: "0 5 0 * * *"   # daily at 00:05
+
+---
+# Runtime infrastructure (everything except the 'test' and 'local' profiles)
+spring:
+  config:
+    activate:
+      on-profile: "!test & !local"
+  datasource:
+    url: jdbc:postgresql://localhost:5432/tradestore
+    username: postgres
+    password: postgres
+  jpa:
+    hibernate:
+      ddl-auto: update
+  data:
+    mongodb:
+      uri: mongodb://localhost:27017/tradestore
+  kafka:
+    bootstrap-servers: localhost:9092

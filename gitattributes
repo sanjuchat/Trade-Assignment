@@ -1,0 +1,5 @@
+# Keep the Maven wrapper runnable on Linux CI regardless of who committed it on Windows
+* text=auto
+mvnw text eol=lf
+*.cmd text eol=crlf
+*.sh text eol=lf

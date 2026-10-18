@@ -1,0 +1,12 @@
+/target/
+!.mvn/wrapper/maven-wrapper.properties
+.idea/
+*.iml
+.vscode/
+.classpath
+.project
+.settings/
+*.log
+# OWASP Dependency-Check local cache / reports
+/.dependency-check/
+/dependency-check-data/

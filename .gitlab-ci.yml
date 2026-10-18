@@ -1,0 +1,19 @@
+image: eclipse-temurin:17
+
+variables:
+  MAVEN_OPTS: "-Dmaven.repo.local=$CI_PROJECT_DIR/.m2/repository"
+
+cache:
+  key: maven-and-nvd
+  paths:
+    - .m2/repository/              # includes org/owasp/dependency-check-data (NVD)
+
+build:
+  stage: build
+  script:
+    - ./mvnw -B -Pci clean verify
+  artifacts:
+    when: always
+    paths:
+      - target/surefire-reports/
+      - target/dependency-check-report.html
