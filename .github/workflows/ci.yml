@@ -25,7 +25,7 @@ jobs:
 
       # Build + full regression suite + OWASP gate (fails on CVSS >= 7)
       - name: Build, test and scan
-        run: ./mvnw -B -Pci clean verify
+        run: ./mvnw -B -Pci "-DnvdApiKey=${{ secrets.NVD_API_KEY }}" clean verify
 
       - name: Upload Surefire reports
         if: always()

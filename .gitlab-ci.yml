@@ -11,7 +11,7 @@ cache:
 build:
   stage: build
   script:
-    - ./mvnw -B -Pci clean verify
+    - ./mvnw -B -Pci "-DnvdApiKey=$NVD_API_KEY" clean verify
   artifacts:
     when: always
     paths:
